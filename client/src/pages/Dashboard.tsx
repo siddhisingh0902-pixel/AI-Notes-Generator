@@ -1,253 +1,127 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { RadialBarChart, RadialBar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
-interface Note {
-  id: number;
-  filename: string;
-  generated_notes: string;
-  created_at: string;
-}
-
-const Dashboard = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const [uploadSuccess, setUploadSuccess] = useState('');
+export default function Dashboard() {
+  const { user } = useAuth();
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchNotes = async () => {
-    try {
-      const res = await api.get('/notes');
-      setNotes(res.data.notes);
-    } catch (err) {
-      console.error('Failed to load notes');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    api.get('/dashboard/stats')
+      .then(r => setStats(r.data))
+      .finally(() => setLoading(false));
+  }, []);
 
-  useEffect(() => { fetchNotes(); }, []);
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  if (loading) return <div className="loading-state"><div className="spinner" /><span>Loading dashboard...</span></div>;
 
-    setUploadError('');
-    setUploadSuccess('');
-    setUploading(true);
-    setSelectedNote(null);
+  const s = stats?.stats || {};
+  const recentTests = stats?.recentTests || [];
 
-    const formData = new FormData();
-    formData.append('pdf', file);
+  const scoreColor = s.averageScore >= 75 ? '#4ade9a' : s.averageScore >= 50 ? '#f5c842' : '#f06b6b';
 
-    try {
-      const res = await api.post('/notes/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const newNote = res.data.note;
-      setNotes((prev) => [newNote, ...prev]);
-      setSelectedNote(newNote);
-      setUploadSuccess('Notes generated!');
-      setTimeout(() => setUploadSuccess(''), 3000);
-    } catch (err: any) {
-      setUploadError(err.response?.data?.message || 'Failed to process PDF.');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this note?')) return;
-    try {
-      await api.delete(`/notes/${id}`);
-      setNotes((prev) => prev.filter((n) => n.id !== id));
-      if (selectedNote?.id === id) setSelectedNote(null);
-    } catch {
-      alert('Failed to delete.');
-    }
-  };
-
-  const copyNotes = () => {
-    if (!selectedNote) return;
-    navigator.clipboard.writeText(selectedNote.generated_notes);
-  };
-
-  const handleLogout = () => { logout(); navigate('/login'); };
-
-  const initials = user?.name?.slice(0, 2).toUpperCase() || 'U';
+  const progressData = [{ name: 'Progress', value: s.completionRate || 0, fill: '#4ade9a' }];
 
   return (
-    <div className="dashboard">
-      {/* ── SIDEBAR ── */}
-      <aside className="sidebar">
-        <div className="sidebar-top">
-          {/* Brand */}
-          <div className="sidebar-brand">
-            <div className="brand-icon">📝</div>
-            <div className="brand-name">AI <span>Notes</span></div>
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</div>
+          <div className="page-subtitle">Here's your study overview</div>
+        </div>
+        <Link to="/syllabi" className="btn btn-primary">+ Upload Syllabus</Link>
+      </div>
+
+      <div className="p-page">
+        {/* Stats row */}
+        <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
+          <div className="stat-card">
+            <div className="stat-icon">📚</div>
+            <div className="stat-value">{s.totalSyllabi || 0}</div>
+            <div className="stat-label">Syllabi</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon">📖</div>
+            <div className="stat-value">{s.completedTopics || 0}<span style={{ fontSize: '1rem', color: 'var(--text3)' }}>/{s.totalTopics || 0}</span></div>
+            <div className="stat-label">Topics Done</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon">📝</div>
+            <div className="stat-value">{s.testsAttempted || 0}</div>
+            <div className="stat-label">Tests Taken</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon">🎯</div>
+            <div className="stat-value" style={{ color: scoreColor }}>{s.averageScore || 0}%</div>
+            <div className="stat-label">Avg Score</div>
+          </div>
+        </div>
+
+        <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
+          {/* Syllabus Completion Ring */}
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Syllabus Completion</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+              <div style={{ width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart
+                    cx="50%" cy="50%"
+                    innerRadius="60%"
+                    outerRadius="100%"
+                    data={progressData}
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    <RadialBar dataKey="value" cornerRadius={10} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </div>
+              <div>
+                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--sage)' }}>{s.completionRate || 0}%</div>
+                <div style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>Topics completed</div>
+                <div style={{ marginTop: '0.5rem', color: 'var(--text2)', fontSize: '0.82rem' }}>{s.completedTopics || 0} of {s.totalTopics || 0} topics</div>
+              </div>
+            </div>
           </div>
 
-          {/* Upload button */}
-          <div className="upload-area">
-            <input
-              type="file"
-              accept="application/pdf"
-              ref={fileInputRef}
-              onChange={handleUpload}
-              style={{ display: 'none' }}
-              id="pdf-upload"
-            />
-            <label
-              htmlFor="pdf-upload"
-              className={`upload-label ${uploading ? 'uploading' : ''}`}
-            >
-              {uploading ? (
-                <>⏳ Generating notes...</>
-              ) : (
-                <><span className="upload-icon">↑</span> Upload PDF</>
-              )}
-            </label>
-
-            {uploading && (
-              <div className="upload-progress">
-                <div className="upload-progress-bar" style={{ width: '100%' }} />
+          {/* Recent test scores */}
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Recent Test Scores</div>
+            {recentTests.length === 0 ? (
+              <div className="empty-state" style={{ padding: '1.5rem' }}>
+                <div style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>No tests attempted yet</div>
+                <Link to="/tests" className="btn btn-secondary btn-sm">Take a Test</Link>
               </div>
-            )}
-            {uploadError && (
-              <div className="upload-status error">{uploadError}</div>
-            )}
-            {uploadSuccess && (
-              <div className="upload-status success">✓ {uploadSuccess}</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={recentTests.map((t: any) => ({ name: t.title?.slice(0, 12), score: Math.round(t.percentage) }))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                  <XAxis dataKey="name" tick={{ fill: 'var(--text3)', fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fill: 'var(--text3)', fontSize: 11 }} />
+                  <Tooltip contentStyle={{ background: 'var(--ink3)', border: '1px solid var(--line)', borderRadius: 8, color: 'var(--text)' }} />
+                  <Bar dataKey="score" fill="#4ade9a" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        {/* Notes list */}
-        <div className="notes-section">
-          <div className="notes-section-header">
-            <span className="notes-section-title">Your Notes</span>
-            <span className="notes-count">{notes.length}</span>
-          </div>
-
-          {loading ? (
-            <div className="notes-empty">
-              <div className="notes-empty-icon">⏳</div>
-              <p>Loading notes...</p>
-            </div>
-          ) : notes.length === 0 ? (
-            <div className="notes-empty">
-              <div className="notes-empty-icon">📂</div>
-              <p>No notes yet.<br />Upload a PDF to get started.</p>
-            </div>
-          ) : (
-            notes.map((note) => (
-              <div
-                key={note.id}
-                className={`note-item ${selectedNote?.id === note.id ? 'active' : ''}`}
-                onClick={() => setSelectedNote(note)}
-              >
-                <div className="note-file-icon">📄</div>
-                <div className="note-info">
-                  <span className="note-filename">{note.filename}</span>
-                  <span className="note-date">
-                    {new Date(note.created_at).toLocaleDateString('en-IN', {
-                      day: 'numeric', month: 'short', year: 'numeric'
-                    })}
-                  </span>
-                </div>
-                <button
-                  className="note-delete"
-                  onClick={(e) => { e.stopPropagation(); handleDelete(note.id); }}
-                  title="Delete"
-                >
-                  🗑
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* User row */}
-        <div className="sidebar-bottom">
-          <div className="user-row">
-            <div className="user-avatar">{initials}</div>
-            <div className="user-info">
-              <span className="user-name-text">{user?.name}</span>
-              <span className="user-role">Free plan</span>
-            </div>
-            <button className="btn-logout" onClick={handleLogout} title="Sign out">
-              ↩
-            </button>
+        {/* Quick actions */}
+        <div className="card">
+          <div style={{ fontWeight: 700, marginBottom: '1rem' }}>Quick Actions</div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <Link to="/syllabi" className="btn btn-secondary">📚 My Syllabi</Link>
+            <Link to="/tests" className="btn btn-secondary">📝 Take a Test</Link>
+            <Link to="/chat" className="btn btn-secondary">🤖 Ask AI</Link>
+            <Link to="/profile" className="btn btn-secondary">👤 My Profile</Link>
           </div>
         </div>
-      </aside>
-
-      {/* ── MAIN VIEWER ── */}
-      <main className="note-viewer">
-        {uploading ? (
-          <div className="generating-state">
-            <div className="generating-spinner" />
-            <h3>Generating your notes...</h3>
-            <p>Reading PDF and calling AI — this takes 10–20 seconds</p>
-          </div>
-        ) : selectedNote ? (
-          <>
-            <div className="note-header-bar">
-              <div className="note-header-left">
-                <div className="note-header-filename">📄 {selectedNote.filename}</div>
-                <div className="note-header-date">
-                  {new Date(selectedNote.created_at).toLocaleString('en-IN')}
-                </div>
-              </div>
-              <div className="note-header-actions">
-                <button className="btn-action" onClick={copyNotes}>Copy</button>
-                <button
-                  className="btn-action danger"
-                  onClick={() => handleDelete(selectedNote.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-
-            <div className="note-body">
-              <div className="note-content-box">
-                <pre>{selectedNote.generated_notes}</pre>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">🤖</div>
-            <h2>AI Notes Generator</h2>
-            <p>Upload any PDF and get structured, AI-powered notes in seconds.</p>
-            <div className="empty-steps">
-              <div className="empty-step">
-                <div className="empty-step-num">1</div>
-                <p>Click Upload PDF</p>
-              </div>
-              <div className="empty-step">
-                <div className="empty-step-num">2</div>
-                <p>AI reads your file</p>
-              </div>
-              <div className="empty-step">
-                <div className="empty-step-num">3</div>
-                <p>Notes appear here</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
+      </div>
     </div>
   );
-};
-
-export default Dashboard;
+}
