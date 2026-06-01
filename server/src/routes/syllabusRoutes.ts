@@ -9,10 +9,19 @@ const router = Router();
 router.use(verifyToken);
 
 /**
- * UPGRADED: Handles single PDF/Text files or an array of multiple images (up to 10 files)
- * The field name on the frontend FormData must be 'files' to match upload.array('files')
+ * UPGRADED: Added an inline interceptor to catch custom text/pdf Multer validation errors gracefully
  */
-router.post('/upload', upload.array('files', 10), uploadSyllabus);
+router.post('/upload', (req, res, next) => {
+  upload.array('files', 10)(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: 'Syllabus upload validation failed.',
+        error: err.message
+      });
+    }
+    next();
+  });
+}, uploadSyllabus);
 
 router.get('/', getSyllabi);
 router.get('/:id', getSyllabusById);

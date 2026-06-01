@@ -202,8 +202,10 @@ export default function SyllabusPage() {
                       style={{ background: 'linear-gradient(135deg, var(--violet), #6d28d9)' }}
                       onClick={async () => {
                         try {
-                          const res = await api.post('/tests/create', { syllabusId: s.id, title: `${s.title} - Mock Test` });
-                          window.location.href = `/tests/${res.data.testId}/take`;
+                          // FIXED: Path changed to '/tests', field renamed to 'syllabus_id'
+                          const res = await api.post('/tests', { syllabus_id: s.id, title: `${s.title} - Mock Test` });
+                          // FIXED: Destructured parameter target path to handle 'res.data.test.id'
+                          window.location.href = `/tests/${res.data.test.id}/take`;
                         } catch (err: any) {
                           alert(err.response?.data?.message || 'Failed to initialize test.');
                         }

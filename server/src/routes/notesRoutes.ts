@@ -14,8 +14,18 @@ const router = Router();
 // Protect all routes
 router.use(verifyToken);
 
-// Upload PDF and generate notes
-router.post('/upload', upload.single('pdf'), uploadAndGenerate);
+// UPGRADED: Changed to upload.array('files') with inline error interceptors
+router.post('/upload', (req, res, next) => {
+  upload.array('files', 10)(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: 'File upload validation failed.',
+        error: err.message
+      });
+    }
+    next();
+  });
+}, uploadAndGenerate);
 
 // Get all notes
 router.get('/', getAllNotes);

@@ -19,7 +19,19 @@ router.put('/topics/:topicId/complete', markTopicComplete);
 router.get('/syllabi/:syllabusId/notes', getAllNotesForSyllabus);
 
 // --- Document Notes Management ---
-router.post('/notes/upload', upload.single('pdf'), uploadAndGenerate);
+// UPGRADED: Changed to upload.array('files') to support notesController structure and added clean error handling
+router.post('/notes/upload', (req, res, next) => {
+  upload.array('files', 10)(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        message: 'File upload validation failed.',
+        error: err.message
+      });
+    }
+    next();
+  });
+}, uploadAndGenerate);
+
 router.get('/notes', getAllNotes);
 router.get('/notes/:id', getNoteById);
 router.delete('/notes/:id', deleteNote);

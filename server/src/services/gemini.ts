@@ -9,10 +9,7 @@ const genAI = new GoogleGenerativeAI(
   process.env.GEMINI_API_KEY as string
 );
 
-const model = genAI.getGenerativeModel({
-  model: 'gemini-2.5-flash',
-});
-
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 async function executeWithRetry(apiCall: () => Promise<any>, retries = 3, delay = 5000): Promise<any> {
   try {
     return await apiCall();

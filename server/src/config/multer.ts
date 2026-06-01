@@ -13,7 +13,12 @@ const storage = multer.diskStorage({
 export const upload = multer({
   storage,
   fileFilter: (_req, file, cb) => {
-    file.mimetype === 'application/pdf' ? cb(null, true) : cb(new Error('PDFs only'));
+    // Allow both PDFs and plain text files
+    if (file.mimetype === 'application/pdf' || file.mimetype === 'text/plain') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDFs and plain text files are allowed!'));
+    }
   },
   limits: { fileSize: 20 * 1024 * 1024 },
 });
